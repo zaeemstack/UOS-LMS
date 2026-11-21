@@ -1,0 +1,10 @@
+dayOfWeek,startTime,endTime,courseCode,courseTitle,sectionName,semester,academicYear,departmentCode,teacherName,roomNumber,building
+MONDAY,08:30,10:00,CS-301,Data Structures & Algorithms,BSCS-6A,6,2025-2026,CS,Dr. Tariq Mahmood,Lab-01,Academic Block A
+MONDAY,10:00,11:30,CS-305,Database Systems,BSCS-6A,6,2025-2026,CS,Prof. Amina Khalid,Room-204,Academic Block B
+MONDAY,11:30,13:00,SE-402,Software Engineering,BSCS-4B,4,2025-2026,SE,Engr. Ali Raza,LH-03,Lecture Hall Block
+TUESDAY,08:30,10:00,CS-101,Programming Fundamentals,BSCS-1A,1,2025-2026,CS,Dr. Tariq Mahmood,Lab-01,Academic Block A
+TUESDAY,10:00,11:30,CS-201,Object Oriented Programming,BSCS-3A,3,2025-2026,CS,Prof. Amina Khalid,Room-204,Academic Block B
+WEDNESDAY,09:00,10:30,EE-201,Digital Logic Design,BSEE-4A,4,2025-2026,EE,Dr. Bilal Aslam,Lab-02,Academic Block A
+THURSDAY,10:30,12:00,CS-401,Computer Networks,BSCS-7A,7,2025-2026,CS,Dr. Shahzad Sarwar,LH-01,Lecture Hall Block
+FRIDAY,08:30,10:00,CS-801,Final Year Project II,BSCS-8A,8,2025-2026,CS,Dr. Tariq Mahmood,Lab-01,Academic Block A
+

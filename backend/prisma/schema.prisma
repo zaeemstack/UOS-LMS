@@ -1,0 +1,224 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String       @id @default(uuid())
+  email            String       @unique
+  passwordHash     String
+  fullName         String
+  employeeOrRollId String       @unique
+  role             String       @default("TEACHER") // "ADMIN", "HOD", "TEACHER", "STUDENT"
+  departmentId     String?
+  department       Department?  @relation(fields: [departmentId], references: [id])
+  isActive         Boolean      @default(true)
+  mustChangePassword Boolean    @default(false)
+  failedAttempts   Int          @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  taughtSlots        TimetableSlot[]     @relation("TeacherSlots")
+  studentEnrollments StudentSection[]
+  markedSessions     AttendanceSession[] @relation("TeacherSessions")
+  approvedOverrides  AttendanceSession[] @relation("AdminOverrides")
+  studentAttendances StudentAttendance[]
+  teacherRequests    OverrideRequest[]   @relation("TeacherOverrideRequests")
+  approvedRequests   OverrideRequest[]   @relation("HodOverrideApprovals")
+
+  @@index([role])
+  @@index([departmentId])
+}
+
+model Department {
+  id               String            @id @default(uuid())
+  name             String
+  code             String            @unique // e.g. "CS", "SE", "EE", "BBA", "ME", "CE", "MATH", "PHY", "CHEM", "BIO"
+  users            User[]
+  courses          Course[]
+  sections         Section[]
+  overrideRequests OverrideRequest[]
+  createdAt        DateTime          @default(now())
+}
+
+model Course {
+  id           String          @id @default(uuid())
+  code         String          @unique // e.g. "CS-301"
+  title        String
+  creditHours  Int             @default(3)
+  departmentId String
+  department   Department      @relation(fields: [departmentId], references: [id])
+  slots        TimetableSlot[]
+  createdAt    DateTime        @default(now())
+}
+
+model Section {
+  id           String           @id @default(uuid())
+  name         String           // e.g. "BSCS-6A"
+  semester     Int              // e.g. 6
+  academicYear String           // e.g. "2025-2026"
+  departmentId String
+  department   Department       @relation(fields: [departmentId], references: [id])
+  students     StudentSection[]
+  slots        TimetableSlot[]
+  createdAt    DateTime         @default(now())
+
+  @@unique([name, academicYear])
+}
+
+model StudentSection {
+  id        String   @id @default(uuid())
+  studentId String
+  sectionId String
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  section   Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, sectionId])
+}
+
+model Room {
+  id             String          @id @default(uuid())
+  roomNumber     String          @unique // e.g. "Lab-304", "LH-1"
+  building       String          // e.g. "Academic Block A"
+  floor          Int             @default(1)
+  assignedSubnet String?         // Optional room subnet restriction e.g. "192.168.52.0/24"
+  routerIp       String?         // Gateway / Router IP e.g. "192.168.52.1"
+  routerMac      String?         // Physical MAC / BSSID of router e.g. "AA:BB:CC:52:00:01"
+  routerName     String?         // Friendly label e.g. "Router 52 (Physics 4.1.20 / 4.1.21)"
+  routerSsid     String?         // Wi-Fi SSID e.g. "UOS-Physics-52"
+  slots          TimetableSlot[]
+}
+
+model TimetableSlot {
+  id           String              @id @default(uuid())
+  dayOfWeek    String              // "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"
+  startTime    String              // "HH:mm" 24hr, e.g. "08:30"
+  endTime      String              // "HH:mm" 24hr, e.g. "10:00"
+  
+  courseId     String
+  course       Course              @relation(fields: [courseId], references: [id])
+  sectionId    String
+  section      Section             @relation(fields: [sectionId], references: [id])
+  teacherId    String
+  teacher      User                @relation("TeacherSlots", fields: [teacherId], references: [id])
+  roomId       String
+  room         Room                @relation(fields: [roomId], references: [id])
+
+  sessions         AttendanceSession[]
+  overrideRequests OverrideRequest[]
+  timetableVersion String              @default("v1.0")
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([teacherId, dayOfWeek])
+  @@index([sectionId, dayOfWeek])
+  @@index([timetableVersion])
+}
+
+model AttendanceSession {
+  id              String            @id @default(uuid())
+  timetableSlotId String
+  timetableSlot   TimetableSlot     @relation(fields: [timetableSlotId], references: [id])
+  date            DateTime          // Date of the class
+  timetableVersion String           @default("v1.0")
+  
+  // Dual Attendance: Teacher Record
+  teacherId       String
+  teacher         User              @relation("TeacherSessions", fields: [teacherId], references: [id])
+  teacherMarkedAt DateTime          @default(now())
+  teacherStatus   String            @default("PRESENT") // "PRESENT", "LATE", "EXCUSED"
+  
+  // Audit & Network Perimeter Fingerprint
+  clientIp            String            // IP used to submit
+  userAgent           String?
+  connectedRouterMac  String?           // Router MAC / BSSID used
+  connectedRouterIp   String?           // Router IP / Gateway
+  biometricVerified   Boolean           @default(false)
+  biometricType       String?           // "WEBAUTHN_FINGERPRINT", "BIOMETRIC_PASSKEY", "SYSTEM_OVERRIDE"
+  sessionStatus       String            @default("COMPLETED") // "COMPLETED", "LOCKED", "OVERRIDDEN"
+
+  // Late-Entry Lock & Admin Override
+  isLocked        Boolean           @default(false)
+  isOverridden    Boolean           @default(false)
+  overrideReason  String?
+  overrideById    String?
+  overrideBy      User?             @relation("AdminOverrides", fields: [overrideById], references: [id])
+  overrideAt      DateTime?
+
+  // Student Attendance Records
+  studentRecords   StudentAttendance[]
+  overrideRequests OverrideRequest[]
+  createdAt        DateTime          @default(now())
+
+  @@unique([timetableSlotId, date])
+  @@index([teacherId, date])
+}
+
+model StudentAttendance {
+  id                  String            @id @default(uuid())
+  attendanceSessionId String
+  attendanceSession   AttendanceSession @relation(fields: [attendanceSessionId], references: [id], onDelete: Cascade)
+  studentId           String
+  student             User              @relation(fields: [studentId], references: [id])
+  status              String            @default("PRESENT") // "PRESENT", "ABSENT", "LATE", "EXCUSED"
+  remarks             String?
+  recordedAt          DateTime          @default(now())
+
+  @@unique([attendanceSessionId, studentId])
+  @@index([studentId])
+}
+
+model OverrideRequest {
+  id                  String             @id @default(uuid())
+  attendanceSessionId String?
+  attendanceSession   AttendanceSession? @relation(fields: [attendanceSessionId], references: [id], onDelete: SetNull)
+  timetableSlotId     String
+  timetableSlot       TimetableSlot      @relation(fields: [timetableSlotId], references: [id], onDelete: Cascade)
+  teacherId           String
+  teacher             User               @relation("TeacherOverrideRequests", fields: [teacherId], references: [id])
+  departmentId        String
+  department          Department         @relation(fields: [departmentId], references: [id])
+  hodId               String?
+  hod                 User?              @relation("HodOverrideApprovals", fields: [hodId], references: [id])
+  reason              String
+  status              String             @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  requestedAt         DateTime           @default(now())
+  reviewedAt          DateTime?
+  reviewNotes         String?
+
+  @@index([departmentId])
+  @@index([teacherId])
+  @@index([status])
+}
+
+model NetworkAuditLog {
+  id        String   @id @default(uuid())
+  ipAddress String
+  userAgent String?
+  endpoint  String
+  isAllowed Boolean
+  reason    String?
+  userId    String?
+  timestamp DateTime @default(now())
+
+  @@index([ipAddress])
+  @@index([timestamp])
+}
+
+model TimetableVersion {
+  id          String   @id @default(uuid())
+  versionCode String   @unique // e.g. "v1.0", "v2.0"
+  label       String   // e.g. "Initial Timetable (Fall 2025)"
+  isActive    Boolean  @default(false)
+  uploadedBy  String?
+  slotCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+

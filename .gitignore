@@ -1,0 +1,47 @@
+# Node dependencies
+node_modules/
+*/node_modules/
+*/*/node_modules/
+
+# Production build outputs
+dist/
+build/
+web-build/
+*/dist/
+*/build/
+
+# Expo & Mobile
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Android Gradle & Build Cache
+.gradle/
+*/.gradle/
+*/*/.gradle/
+local.properties
+*/android/app/build/
+*/android/build/
+*.apk
+*.aab
+
+# Environment & Secret files
+.env.local
+.env.*.local
+
+# Database backups & Temp files
+*.bak
+*.tmp
+*.tmp*
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS Generated
+.DS_Store
+Thumbs.db

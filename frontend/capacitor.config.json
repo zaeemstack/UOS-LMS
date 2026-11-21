@@ -1,0 +1,15 @@
+{
+  "appId": "pk.edu.uosahiwal.attendance",
+  "appName": "UOS Attendance",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true
+  }
+}
+

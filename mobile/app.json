@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "UOS Attendance",
+    "slug": "uos-attendance",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "pk.edu.uosahiwal.attendance",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Use Face ID to securely certify faculty attendance."
+      }
+    },
+    "android": {
+      "package": "pk.edu.uosahiwal.attendance",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#020617",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "CAMERA",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
