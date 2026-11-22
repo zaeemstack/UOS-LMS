@@ -85,38 +85,21 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
 
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const candidateDistPaths = [
-  path.resolve(__dirname, '../../frontend/dist'),
-  path.resolve(__dirname, '../dist'),
-  path.resolve(__dirname, '../public'),
-];
-const frontendDist = candidateDistPaths.find((p) => fs.existsSync(p));
-
-// In production, serve the compiled React SPA directly
-if (frontendDist) {
-  console.log('[SPA] Serving frontend from:', frontendDist);
-  app.use(express.static(frontendDist, {
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
-      } else if (filePath.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css; charset=UTF-8');
-      }
-    }
-  }));
-  app.get('*', (req, res, next) => {
-    if (req.originalUrl.startsWith('/api')) {
-      return next();
-    }
-    res.sendFile(path.join(frontendDist, 'index.html'));
+// Mobile API Root Endpoint
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    system: 'University of Sahiwal Attendance Mobile App API',
+    version: '2.0.0',
+    endpoints: {
+      auth: '/api/auth',
+      timetable: '/api/timetable',
+      attendance: '/api/attendance',
+      network: '/api/network',
+      admin: '/api/admin',
+    },
   });
-}
+});
 
 // Fallback 404 handler for API routes
 app.use('/api', (req, res) => {

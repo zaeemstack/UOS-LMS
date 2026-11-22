@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">UOS Attendance</string>
-    <string name="title_activity_main">UOS Attendance</string>
-    <string name="package_name">pk.edu.uosahiwal.attendance</string>
-    <string name="custom_url_scheme">pk.edu.uosahiwal.attendance</string>
-</resources>
