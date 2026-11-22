@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
   Dimensions,
+  Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -110,9 +111,13 @@ export const LoginScreen = () => {
           <View style={styles.decorativeCircle1} />
           <View style={styles.decorativeCircle2} />
 
-          {/* UoS Golden Badge */}
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoBadgeText}>UoS</Text>
+          {/* Official University of Sahiwal Logo */}
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../../assets/uos-logo.png')}
+              style={styles.universityLogo}
+              resizeMode="contain"
+            />
           </View>
 
           {/* University Title & Subtitle */}
@@ -323,25 +328,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#0d523a',
     opacity: 0.4,
   },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: '#f2b737',
+  logoContainer: {
+    width: 84,
+    height: 84,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+    padding: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  logoBadgeText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#0a4d36',
-    letterSpacing: 0.5,
+  universityLogo: {
+    width: '100%',
+    height: '100%',
   },
   universityTitle: {
     fontSize: 26,
