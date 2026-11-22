@@ -503,6 +503,7 @@ export const handleBulkImport = async (req, res) => {
   const originalName = (req.file.originalname || '').toLowerCase();
   const isPdf = originalName.endsWith('.pdf');
   const isWord = originalName.endsWith('.doc') || originalName.endsWith('.docx');
+  const versionName = (req.body?.versionCode || req.body?.versionName || 'v2.0').trim();
 
   try {
     let result;
@@ -511,12 +512,19 @@ export const handleBulkImport = async (req, res) => {
     } else if (type === 'students') {
       result = await importStudentsFromCsv(filePath);
     } else if (type === 'timetable') {
+      // Archive existing active slots so previous attendance history remains safely intact
+      if (req.body?.archivePrevious !== 'false') {
+        await prisma.timetableSlot.updateMany({
+          data: { isActive: false },
+        });
+      }
+
       if (isPdf) {
-        result = await importTimetableFromPdf(filePath);
+        result = await importTimetableFromPdf(filePath, versionName);
       } else if (isWord) {
-        result = await importTimetableFromWord(filePath);
+        result = await importTimetableFromWord(filePath, versionName);
       } else {
-        result = await importTimetableFromCsv(filePath);
+        result = await importTimetableFromCsv(filePath, versionName);
       }
     } else {
       return res.status(400).json({ success: false, message: 'Invalid import type.' });

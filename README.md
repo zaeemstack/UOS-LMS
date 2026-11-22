@@ -89,10 +89,15 @@ The application strictly implements the University of Sahiwal portal design spec
    - Tapping any teacher opens their **complete date-wise submitted attendance chronicle** with present/absent breakdowns and biometric stamps.
 
 4. **Smart Timetable Engine & Versioning (`HodTimetableManagerScreen.js`)**:
-   - **Pasting / Uploading Timetable**: Paste raw CSV lines or upload timetable documents.
-   - **Smart Teacher Reassignment**: If an assigned instructor changed in the new timetable, the system automatically reassigns the slot.
+   - **Direct File Upload (No Manual Writing Required)**: Upload timetable files directly (`.csv`, `.pdf`, `.doc`, `.docx`) picked from device storage using `expo-document-picker`.
+   - **Smart Teacher Reassignment**: If an assigned instructor changed in the new timetable, the system automatically detects and updates the slot.
    - **Safe Historical Archiving**: Past timetable data and historical attendance records are **100% preserved** in the archive.
    - **Visual Distinction Badges**: Clear badges on every class (`[🟢 Active v2.0]` vs `[📁 Archived v1.0]`) distinguish current sessions from archived semesters.
+
+5. **Class Student Roster Import (`MarkAttendanceScreen.js`)**:
+   - Teachers can import / share their class student list (`.csv`, `.txt`, Excel-exported roster) directly on the attendance screen.
+   - Includes columns for **Roll Number**, **Student Name**, **Class / Degree**, **Section**, and **Academic Session / Batch**.
+   - Automatically provisions student accounts, binds them to the section and class slot, and immediately populates the live attendance register.
 
 ---
 
@@ -194,3 +199,4 @@ The mobile application is fully configured for Google Play Console submission:
 ## 8. License & Intellectual Property
 
 Designed, architected, and built specifically for the **University of Sahiwal (UOS)** by **Muhammad Zaeem** and **Muhammad Saif Ullah**. All rights reserved.
+

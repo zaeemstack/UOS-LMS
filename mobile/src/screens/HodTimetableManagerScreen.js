@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import api from '../api/client';
 
@@ -26,11 +27,13 @@ FRIDAY,08:00,09:00,PHY-305,Quantum Mechanics,BS.PHY5-A,Ms. Shumaila Fatima,4.1.2
 export const HodTimetableManagerScreen = ({ onBack, onTabChange, activeTab = 'timetable' }) => {
   const [versions, setVersions] = useState([]);
   const [loadingVersions, setLoadingVersions] = useState(true);
-  const [pastedText, setPastedText] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
   const [versionCode, setVersionCode] = useState('v2.0');
   const [versionLabel, setVersionLabel] = useState('Spring 2026 Semester Timetable');
   const [submitting, setSubmitting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [showManualPaste, setShowManualPaste] = useState(false);
+  const [pastedText, setPastedText] = useState('');
 
   const fetchVersions = async () => {
     try {
@@ -54,18 +57,57 @@ export const HodTimetableManagerScreen = ({ onBack, onTabChange, activeTab = 'ti
     fetchVersions();
   }, []);
 
+  const handlePickDocument = async () => {
+    try {
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch (_) {}
+
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'text/csv',
+          'text/comma-separated-values',
+          'application/csv',
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          '*/*',
+        ],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        setSelectedFile(file);
+
+        // Derive clean version label from file name
+        const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        if (!versionLabel || versionLabel === 'Spring 2026 Semester Timetable') {
+          setVersionLabel(`Official Timetable - ${cleanName}`);
+        }
+      }
+    } catch (err) {
+      Alert.alert('File Picker Error', 'Could not open file picker: ' + err.message);
+    }
+  };
+
   const handleLoadSample = () => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (_) {}
     setPastedText(SAMPLE_TIMETABLE_CSV);
+    setShowManualPaste(true);
     setVersionCode('v2.1');
     setVersionLabel('Revised Mid-Semester Timetable');
   };
 
   const handleImplementTimetable = async () => {
-    if (!pastedText.trim()) {
-      Alert.alert('Content Required', 'Please paste CSV or text timetable data to import.');
+    // Check if either a file is picked OR text was pasted
+    if (!selectedFile && !pastedText.trim()) {
+      Alert.alert(
+        'Timetable Required',
+        'Please select a Timetable file (.csv, .pdf, .doc, .docx) from your phone or paste timetable data.'
+      );
       return;
     }
 
@@ -73,12 +115,34 @@ export const HodTimetableManagerScreen = ({ onBack, onTabChange, activeTab = 'ti
     setImportResult(null);
 
     try {
-      const res = await api.post('/admin/timetable/paste-import', {
-        rawText: pastedText.trim(),
-        versionName: versionCode.trim() || 'v2.0',
-        versionLabel: versionLabel.trim(),
-        archivePrevious: true,
-      });
+      let res;
+      if (selectedFile) {
+        // Upload chosen file via multipart/form-data
+        const formData = new FormData();
+        formData.append('file', {
+          uri: Platform.OS === 'android' ? selectedFile.uri : selectedFile.uri.replace('file://', ''),
+          name: selectedFile.name || 'timetable.csv',
+          type: selectedFile.mimeType || 'application/octet-stream',
+        });
+        formData.append('versionCode', versionCode.trim() || 'v2.0');
+        formData.append('versionLabel', versionLabel.trim() || 'New Timetable');
+        formData.append('archivePrevious', 'true');
+
+        res = await api.post('/admin/import/timetable', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 60000,
+        });
+      } else {
+        // Manual paste fallback
+        res = await api.post('/admin/timetable/paste-import', {
+          rawText: pastedText.trim(),
+          versionName: versionCode.trim() || 'v2.0',
+          versionLabel: versionLabel.trim(),
+          archivePrevious: true,
+        });
+      }
 
       if (res.data?.success) {
         try {
@@ -86,10 +150,13 @@ export const HodTimetableManagerScreen = ({ onBack, onTabChange, activeTab = 'ti
         } catch (_) {}
 
         setImportResult(res.data);
+        const importedCount = res.data.result?.imported || res.data.importedCount || 'All';
         Alert.alert(
           'Timetable Implemented!',
-          `New timetable (${versionCode}) is now LIVE. ${res.data.importedCount} class slots activated. All past attendance data remains 100% safe in archive.`
+          `New timetable (${versionCode}) is now LIVE across the university.\n\n${importedCount} class slots activated and teachers updated automatically.\n\nAll previous attendance records remain 100% safe in archive.`
         );
+        setSelectedFile(null);
+        setPastedText('');
         fetchVersions();
       }
     } catch (err) {
@@ -102,6 +169,21 @@ export const HodTimetableManagerScreen = ({ onBack, onTabChange, activeTab = 'ti
     }
   };
 
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const getFileIcon = (name = '') => {
+    const ext = name.split('.').pop().toLowerCase();
+    if (ext === 'pdf') return 'document-text';
+    if (ext === 'csv') return 'grid-outline';
+    if (ext === 'doc' || ext === 'docx') return 'reader-outline';
+    return 'document-attach-outline';
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Green Header */}
@@ -109,7 +191,7 @@ export const HodTimetableManagerScreen = ({ onBack, onTabChange, activeTab = 'ti
         <Text style={styles.headerSub}>Department Administration</Text>
         <Text style={styles.headerTitle}>Timetable engine &amp; versions</Text>
         <Text style={styles.headerNote}>
-          Smart timetable import with automated teacher reassignment and safe historical data archiving.
+          Upload timetable file (PDF, CSV, DOC) to update all teacher schedules and safely archive past data.
         </Text>
       </View>
 
@@ -171,21 +253,75 @@ export const HodTimetableManagerScreen = ({ onBack, onTabChange, activeTab = 'ti
           </View>
         </View>
 
-        {/* Timetable Paste & Smart Import Card */}
+        {/* Timetable File Upload Card */}
         <View style={styles.importCard}>
           <View style={styles.importHeaderRow}>
-            <View>
-              <Text style={styles.importTitle}>Paste New Timetable (CSV / DOC)</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.importTitle}>Upload New Timetable</Text>
               <Text style={styles.importSub}>
-                Reassigns teachers automatically if changes occurred.
+                Select CSV, PDF, or Word DOC file from your device.
               </Text>
             </View>
 
             <TouchableOpacity style={styles.sampleBtn} onPress={handleLoadSample} activeOpacity={0.8}>
               <Ionicons name="clipboard-outline" size={13} color="#0a4d36" style={{ marginRight: 4 }} />
-              <Text style={styles.sampleBtnText}>Load Sample</Text>
+              <Text style={styles.sampleBtnText}>Sample</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Primary File Picker Box */}
+          {!selectedFile ? (
+            <TouchableOpacity
+              style={styles.dropZone}
+              onPress={handlePickDocument}
+              activeOpacity={0.82}
+            >
+              <View style={styles.dropZoneIconWrap}>
+                <Ionicons name="cloud-upload-outline" size={32} color="#0a4d36" />
+              </View>
+              <Text style={styles.dropZoneTitle}>Select Timetable File</Text>
+              <Text style={styles.dropZoneSub}>
+                Tap to pick .csv, .pdf, .doc, or .docx file directly from device storage
+              </Text>
+              <View style={styles.browsePill}>
+                <Ionicons name="folder-open-outline" size={15} color="#0a4d36" style={{ marginRight: 6 }} />
+                <Text style={styles.browsePillText}>Browse Files</Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.selectedFileCard}>
+              <View style={styles.fileIconBox}>
+                <Ionicons name={getFileIcon(selectedFile.name)} size={28} color="#0a4d36" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.selectedFileName} numberOfLines={1}>
+                  {selectedFile.name}
+                </Text>
+                <View style={styles.fileMetaRow}>
+                  <View style={styles.fileExtBadge}>
+                    <Text style={styles.fileExtBadgeText}>
+                      {(selectedFile.name.split('.').pop() || 'FILE').toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={styles.fileSizeText}>
+                    {formatFileSize(selectedFile.size)}
+                  </Text>
+                  <View style={styles.readyBadge}>
+                    <Ionicons name="checkmark-circle" size={13} color="#059669" style={{ marginRight: 3 }} />
+                    <Text style={styles.readyBadgeText}>Ready to upload</Text>
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.changeFileBtn}
+                onPress={() => setSelectedFile(null)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close-circle" size={22} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Version Inputs Row */}
           <View style={styles.versionInputsRow}>
@@ -211,43 +347,66 @@ export const HodTimetableManagerScreen = ({ onBack, onTabChange, activeTab = 'ti
             </View>
           </View>
 
-          {/* Paste Input Area */}
-          <Text style={styles.inputLabel}>Paste CSV / Timetable Content</Text>
-          <TextInput
-            style={styles.pasteTextArea}
-            value={pastedText}
-            onChangeText={setPastedText}
-            placeholder={`Paste timetable lines here:\nDay,StartTime,EndTime,CourseCode,CourseTitle,Section,TeacherName,Room`}
-            placeholderTextColor="#94a3b8"
-            multiline
-            numberOfLines={8}
-          />
-
-          {/* Import Button */}
+          {/* Optional Collapsible Manual Paste */}
           <TouchableOpacity
-            style={styles.implementBtn}
+            style={styles.togglePasteRow}
+            onPress={() => setShowManualPaste(!showManualPaste)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={showManualPaste ? 'chevron-up' : 'chevron-down'}
+              size={15}
+              color="#64748b"
+              style={{ marginRight: 6 }}
+            />
+            <Text style={styles.togglePasteText}>
+              {showManualPaste ? 'Hide manual text paste' : 'Or paste CSV / text manually'}
+            </Text>
+          </TouchableOpacity>
+
+          {showManualPaste && (
+            <View style={{ marginTop: 8 }}>
+              <Text style={styles.inputLabel}>Paste CSV Lines</Text>
+              <TextInput
+                style={styles.pasteTextArea}
+                value={pastedText}
+                onChangeText={setPastedText}
+                placeholder={`Day,StartTime,EndTime,CourseCode,CourseTitle,Section,TeacherName,Room\nMONDAY,08:00,09:00,PHY-101,Mechanics,BS.PHY1-A,Dr. Farooq Aziz,4.1.4`}
+                placeholderTextColor="#94a3b8"
+                multiline
+                numberOfLines={6}
+              />
+            </View>
+          )}
+
+          {/* Upload Button */}
+          <TouchableOpacity
+            style={[
+              styles.implementBtn,
+              !selectedFile && !pastedText.trim() && styles.implementBtnDisabled,
+            ]}
             onPress={handleImplementTimetable}
-            disabled={submitting}
+            disabled={submitting || (!selectedFile && !pastedText.trim())}
             activeOpacity={0.88}
           >
             {submitting ? (
               <ActivityIndicator color="#0a4d36" size="small" />
             ) : (
               <>
-                <Ionicons name="cloud-upload" size={18} color="#0a4d36" style={{ marginRight: 8 }} />
+                <Ionicons name="rocket-outline" size={18} color="#0a4d36" style={{ marginRight: 8 }} />
                 <Text style={styles.implementBtnText}>
-                  Implement New Timetable &amp; Update Teachers
+                  Upload &amp; Implement New Timetable
                 </Text>
               </>
             )}
           </TouchableOpacity>
 
-          {/* Result Banner if any */}
+          {/* Result Banner */}
           {importResult && (
             <View style={styles.resultBox}>
               <Ionicons name="checkmark-circle" size={18} color="#059669" style={{ marginRight: 6 }} />
               <Text style={styles.resultText}>
-                {importResult.message}
+                {importResult.message || 'Timetable uploaded and activated successfully.'}
               </Text>
             </View>
           )}
@@ -257,23 +416,47 @@ export const HodTimetableManagerScreen = ({ onBack, onTabChange, activeTab = 'ti
       {/* HOD Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => onTabChange && onTabChange('hod_classes')}>
-          <Ionicons name={activeTab === 'hod_classes' ? 'calendar' : 'calendar-outline'} size={22} color={activeTab === 'hod_classes' ? '#0a4d36' : '#94a3b8'} />
-          <Text style={[styles.navLabel, activeTab === 'hod_classes' && styles.navLabelActive]}>My Classes</Text>
+          <Ionicons
+            name={activeTab === 'hod_classes' ? 'calendar' : 'calendar-outline'}
+            size={22}
+            color={activeTab === 'hod_classes' ? '#0a4d36' : '#94a3b8'}
+          />
+          <Text style={[styles.navLabel, activeTab === 'hod_classes' && styles.navLabelActive]}>
+            My Classes
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navItem} onPress={() => onTabChange && onTabChange('overview')}>
-          <Ionicons name={activeTab === 'overview' ? 'shield-checkmark' : 'shield-checkmark-outline'} size={22} color={activeTab === 'overview' ? '#0a4d36' : '#94a3b8'} />
-          <Text style={[styles.navLabel, activeTab === 'overview' && styles.navLabelActive]}>Overview</Text>
+          <Ionicons
+            name={activeTab === 'overview' ? 'shield-checkmark' : 'shield-checkmark-outline'}
+            size={22}
+            color={activeTab === 'overview' ? '#0a4d36' : '#94a3b8'}
+          />
+          <Text style={[styles.navLabel, activeTab === 'overview' && styles.navLabelActive]}>
+            Overview
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navItem} onPress={() => onTabChange && onTabChange('faculty')}>
-          <Ionicons name={activeTab === 'faculty' ? 'people' : 'people-outline'} size={22} color={activeTab === 'faculty' ? '#0a4d36' : '#94a3b8'} />
-          <Text style={[styles.navLabel, activeTab === 'faculty' && styles.navLabelActive]}>Faculty</Text>
+          <Ionicons
+            name={activeTab === 'faculty' ? 'people' : 'people-outline'}
+            size={22}
+            color={activeTab === 'faculty' ? '#0a4d36' : '#94a3b8'}
+          />
+          <Text style={[styles.navLabel, activeTab === 'faculty' && styles.navLabelActive]}>
+            Faculty
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navItem} onPress={() => onTabChange && onTabChange('timetable')}>
-          <Ionicons name={activeTab === 'timetable' ? 'layers' : 'layers-outline'} size={22} color={activeTab === 'timetable' ? '#0a4d36' : '#94a3b8'} />
-          <Text style={[styles.navLabel, activeTab === 'timetable' && styles.navLabelActive]}>Timetable</Text>
+          <Ionicons
+            name={activeTab === 'timetable' ? 'layers' : 'layers-outline'}
+            size={22}
+            color={activeTab === 'timetable' ? '#0a4d36' : '#94a3b8'}
+          />
+          <Text style={[styles.navLabel, activeTab === 'timetable' && styles.navLabelActive]}>
+            Timetable
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -358,8 +541,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   versionItemActive: {
-    backgroundColor: '#e6f7ef',
-    borderColor: '#a7f3d0',
+    backgroundColor: '#f0fdf4',
+    borderColor: '#86efac',
   },
   versionItemArchived: {
     backgroundColor: '#f8fafc',
@@ -373,50 +556,49 @@ const styles = StyleSheet.create({
   versionBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   badgeActive: {
-    backgroundColor: '#0a4d36',
-  },
-  textActive: {
-    color: '#ffffff',
-    fontWeight: '800',
-    fontSize: 10,
+    backgroundColor: '#dcfce7',
   },
   badgeArchived: {
-    backgroundColor: '#cbd5e1',
-  },
-  textArchived: {
-    color: '#334155',
-    fontWeight: '700',
-    fontSize: 10,
+    backgroundColor: '#f1f5f9',
   },
   versionBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  textActive: {
+    color: '#15803d',
+  },
+  textArchived: {
+    color: '#64748b',
   },
   versionLabelText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#0f172a',
+    marginBottom: 2,
   },
   versionSlotText: {
     fontSize: 11,
     color: '#64748b',
-    marginTop: 2,
   },
   safetyGuaranteeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
     backgroundColor: '#f0fdf4',
     padding: 10,
     borderRadius: 10,
-    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
   },
   safetyGuaranteeText: {
     fontSize: 11,
-    color: '#065f46',
+    color: '#166534',
     flex: 1,
-    fontWeight: '500',
+    lineHeight: 15,
   },
   importCard: {
     backgroundColor: '#ffffff',
@@ -424,6 +606,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    marginBottom: 20,
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -433,11 +616,11 @@ const styles = StyleSheet.create({
   importHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 14,
   },
   importTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -451,103 +634,222 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#e6f7ef',
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#a7f3d0',
+    borderColor: '#bbf7d0',
   },
   sampleBtnText: {
     fontSize: 11,
+    fontWeight: '600',
+    color: '#0a4d36',
+  },
+  dropZone: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#0a4d36',
+    borderRadius: 14,
+    backgroundColor: '#f6fbf8',
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  dropZoneIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#e6f7ef',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  dropZoneTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0a4d36',
+    marginBottom: 4,
+  },
+  dropZoneSub: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    lineHeight: 16,
+  },
+  browsePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#0a4d36',
+  },
+  browsePillText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#0a4d36',
   },
+  selectedFileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#86efac',
+    marginBottom: 14,
+  },
+  fileIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedFileName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 3,
+  },
+  fileMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fileExtBadge: {
+    backgroundColor: '#0a4d36',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  fileExtBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  fileSizeText: {
+    fontSize: 11,
+    color: '#64748b',
+    marginRight: 8,
+  },
+  readyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  readyBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  changeFileBtn: {
+    padding: 4,
+  },
   versionInputsRow: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   inputLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#475569',
-    marginBottom: 4,
+    marginBottom: 5,
   },
   textInputSmall: {
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 13,
     color: '#0f172a',
+  },
+  togglePasteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    marginBottom: 6,
+  },
+  togglePasteText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
   },
   pasteTextArea: {
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 12,
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 11,
     color: '#0f172a',
-    minHeight: 120,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    height: 100,
     textAlignVertical: 'top',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   implementBtn: {
-    backgroundColor: '#f2b737', // Golden amber
-    borderRadius: 12,
-    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#f2b737',
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 6,
     shadowColor: '#f2b737',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
     elevation: 3,
+  },
+  implementBtnDisabled: {
+    backgroundColor: '#e2e8f0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   implementBtnText: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#0a4d36',
   },
   resultBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ecfdf5',
+    backgroundColor: '#f0fdf4',
     borderWidth: 1,
-    borderColor: '#a7f3d0',
+    borderColor: '#bbf7d0',
     borderRadius: 10,
     padding: 12,
     marginTop: 12,
   },
   resultText: {
     fontSize: 12,
-    color: '#065f46',
+    color: '#166534',
     flex: 1,
-    fontWeight: '600',
+    lineHeight: 16,
   },
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+    paddingTop: 10,
   },
   navItem: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-    minWidth: 60,
   },
   navLabel: {
     fontSize: 11,
+    fontWeight: '500',
     color: '#94a3b8',
-    fontWeight: '600',
     marginTop: 3,
   },
   navLabelActive: {

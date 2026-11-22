@@ -131,7 +131,7 @@ const TEACHER_PREFIX_REGEX = /(?:Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.|Engr\.|Lect\.)\s+([
 /**
  * Master slot inserter
  */
-async function processTimetableEntries(extractedItems) {
+async function processTimetableEntries(extractedItems, versionName = 'v2.0') {
   const defaultPassword = await getDefaultPasswordHash();
 
   const [depts, courses, sections, rooms, teachers] = await Promise.all([
@@ -257,6 +257,8 @@ async function processTimetableEntries(extractedItems) {
           sectionId,
           roomId,
           teacherId: teacher.id,
+          timetableVersion: versionName,
+          isActive: true,
         },
       });
 
@@ -412,7 +414,7 @@ function extractFromTextLines(rawText) {
 /**
  * Main export: Import Timetable from Word (.doc or .docx) file
  */
-export async function importTimetableFromWord(filePath) {
+export async function importTimetableFromWord(filePath, versionName = 'v2.0') {
   const ext = path.extname(filePath).toLowerCase();
   const fileBuffer = fs.readFileSync(filePath);
 
@@ -452,5 +454,5 @@ export async function importTimetableFromWord(filePath) {
     );
   }
 
-  return processTimetableEntries(items);
+  return processTimetableEntries(items, versionName);
 }

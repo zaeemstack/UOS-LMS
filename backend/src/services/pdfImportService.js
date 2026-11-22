@@ -131,7 +131,7 @@ function parseCellByClusters(cellItems) {
 /**
  * High-accuracy aSc Timetables parser (Page-by-page grid extraction)
  */
-async function parseAscTimetable(parser, defaultPassword, defaultDeptId, deptMap, courseMap, sectionMap, roomMap, teacherNameMap) {
+async function parseAscTimetable(parser, defaultPassword, defaultDeptId, deptMap, courseMap, sectionMap, roomMap, teacherNameMap, versionName = 'v2.0') {
   const numPages = parser.doc.numPages;
   console.log(`[PDF Import - aSc Parser] Detected aSc Timetables format across ${numPages} pages.`);
 
@@ -258,6 +258,8 @@ async function parseAscTimetable(parser, defaultPassword, defaultDeptId, deptMap
               sectionId,
               roomId,
               teacherId: teacher.id,
+              timetableVersion: versionName,
+              isActive: true,
             },
           });
 
@@ -318,7 +320,7 @@ const TEACHER_PREFIX_REGEX = /(?:Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.|Engr\.|Lect\.)\s+([
 /**
  * Main PDF Import Entry Point
  */
-export async function importTimetableFromPdf(filePath) {
+export async function importTimetableFromPdf(filePath, versionName = 'v2.0') {
   const pdfBuffer = fs.readFileSync(filePath);
   const defaultPassword = await getDefaultPasswordHash();
 
@@ -369,7 +371,8 @@ export async function importTimetableFromPdf(filePath) {
             courseMap,
             sectionMap,
             roomMap,
-            teacherNameMap
+            teacherNameMap,
+            versionName
           );
         }
       }
@@ -510,6 +513,8 @@ export async function importTimetableFromPdf(filePath) {
           sectionId,
           roomId,
           teacherId: teacher.id,
+          timetableVersion: versionName,
+          isActive: true,
         },
       });
 

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +33,16 @@ export const MarkAttendanceScreen = ({ slotId, onBack }) => {
   const [bioMode, setBioMode] = useState('THUMB'); // 'THUMB' | 'FACE'
   const [teacherPassword, setTeacherPassword] = useState('');
   const [successData, setSuccessData] = useState(null);
+
+  // Student Roster Import Modal State
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [studentFile, setStudentFile] = useState(null);
+  const [inputClassName, setInputClassName] = useState('');
+  const [inputSection, setInputSection] = useState('');
+  const [inputSession, setInputSession] = useState('');
+  const [pastedStudentText, setPastedStudentText] = useState('');
+  const [importingStudents, setImportingStudents] = useState(false);
+  const [showManualStudentPaste, setShowManualStudentPaste] = useState(false);
 
   useEffect(() => {
     fetchRoster();
@@ -211,6 +222,108 @@ export const MarkAttendanceScreen = ({ slotId, onBack }) => {
     }
   };
 
+  const handleOpenImportModal = () => {
+    setInputSection(slot?.section?.name || 'BSCS-6A');
+    setInputSession(slot?.section?.academicYear || '2022-2026');
+    setInputClassName(slot?.course?.title || slot?.course?.code || 'BS Computer Science');
+    setShowImportModal(true);
+  };
+
+  const handlePickStudentFile = async () => {
+    try {
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch (_) {}
+
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'text/csv',
+          'text/comma-separated-values',
+          'application/csv',
+          'text/plain',
+          '*/*',
+        ],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setStudentFile(result.assets[0]);
+      }
+    } catch (err) {
+      Alert.alert('File Picker Error', err.message);
+    }
+  };
+
+  const handleLoadSampleStudents = () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (_) {}
+    const sample = `Roll No,Student Name,Class,Section,Session
+FA22-BCS-001,Muhammad Zaeem,BSCS,${inputSection || 'BSCS-6A'},${inputSession || '2022-2026'}
+FA22-BCS-002,Hamza Tariq,BSCS,${inputSection || 'BSCS-6A'},${inputSession || '2022-2026'}
+FA22-BCS-003,Fatima Noor,BSCS,${inputSection || 'BSCS-6A'},${inputSession || '2022-2026'}
+FA22-BCS-004,Ali Hassan,BSCS,${inputSection || 'BSCS-6A'},${inputSession || '2022-2026'}
+FA22-BCS-005,Ayesha Khan,BSCS,${inputSection || 'BSCS-6A'},${inputSession || '2022-2026'}`;
+    setPastedStudentText(sample);
+    setShowManualStudentPaste(true);
+  };
+
+  const handleUploadStudentRoster = async () => {
+    if (!studentFile && !pastedStudentText.trim()) {
+      Alert.alert(
+        'Student List Required',
+        'Please select a CSV or text file, or paste student records to import.'
+      );
+      return;
+    }
+
+    setImportingStudents(true);
+    try {
+      const formData = new FormData();
+      if (studentFile) {
+        formData.append('file', {
+          uri: Platform.OS === 'android' ? studentFile.uri : studentFile.uri.replace('file://', ''),
+          name: studentFile.name || 'students.csv',
+          type: studentFile.mimeType || 'text/csv',
+        });
+      }
+      if (slotId) formData.append('slotId', slotId);
+      formData.append('sectionName', inputSection.trim());
+      formData.append('session', inputSession.trim());
+      formData.append('className', inputClassName.trim());
+      if (pastedStudentText.trim()) {
+        formData.append('rawText', pastedStudentText.trim());
+      }
+
+      const res = await api.post('/attendance/import-students', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
+      });
+
+      if (res.data?.success) {
+        try {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (_) {}
+
+        Alert.alert(
+          'Students Enrolled!',
+          `Successfully enrolled ${res.data.enrolledCount} students into ${inputSection} (${inputSession})!\n\nYour attendance register has been updated.`
+        );
+        setShowImportModal(false);
+        setStudentFile(null);
+        setPastedStudentText('');
+        fetchRoster();
+      }
+    } catch (err) {
+      try {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } catch (_) {}
+      Alert.alert('Import Failed', err.response?.data?.message || err.message);
+    } finally {
+      setImportingStudents(false);
+    }
+  };
+
   const getInitials = (name) => {
     if (!name) return 'ST';
     const parts = name.trim().split(' ');
@@ -379,6 +492,26 @@ export const MarkAttendanceScreen = ({ slotId, onBack }) => {
             <Text style={styles.quickActionRoseText}>Mark all absent</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Add / Import Class Students Button */}
+        <TouchableOpacity
+          style={styles.importStudentsBar}
+          onPress={handleOpenImportModal}
+          activeOpacity={0.85}
+        >
+          <View style={styles.importStudentsBarLeft}>
+            <View style={styles.importBarIcon}>
+              <Ionicons name="people" size={16} color="#0a4d36" />
+            </View>
+            <View>
+              <Text style={styles.importStudentsBarTitle}>Import / Add Students List</Text>
+              <Text style={styles.importStudentsBarSub}>
+                Upload CSV file with Class, Session, Section &amp; Roll Numbers
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#0a4d36" />
+        </TouchableOpacity>
 
         {/* Students Roster List */}
         {loading ? (
@@ -560,6 +693,188 @@ export const MarkAttendanceScreen = ({ slotId, onBack }) => {
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* Student Roster Import Modal */}
+      <Modal
+        visible={showImportModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowImportModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={[styles.modalCard, { maxHeight: '90%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Modal Header */}
+              <View style={styles.modalHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>Import Student Roster</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Upload class student list with Roll No, Name, Class, Section &amp; Session
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowImportModal(false)}>
+                  <Ionicons name="close" size={24} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Slot Target Badge */}
+              <View style={styles.slotTargetBadge}>
+                <Ionicons name="school-outline" size={16} color="#0a4d36" style={{ marginRight: 6 }} />
+                <Text style={styles.slotTargetBadgeText}>
+                  {courseCode} · {section} · Session: {slot?.section?.academicYear || '2025-2026'}
+                </Text>
+              </View>
+
+              {/* File Upload Box */}
+              {!studentFile ? (
+                <TouchableOpacity
+                  style={styles.studentDropZone}
+                  onPress={handlePickStudentFile}
+                  activeOpacity={0.82}
+                >
+                  <View style={styles.studentDropIconWrap}>
+                    <Ionicons name="cloud-upload-outline" size={28} color="#0a4d36" />
+                  </View>
+                  <Text style={styles.studentDropTitle}>Select Student List File</Text>
+                  <Text style={styles.studentDropSub}>
+                    Pick .csv or .txt file directly from your phone
+                  </Text>
+                  <View style={styles.studentBrowseBtn}>
+                    <Ionicons name="folder-open-outline" size={14} color="#0a4d36" style={{ marginRight: 5 }} />
+                    <Text style={styles.studentBrowseBtnText}>Browse CSV File</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.selectedFileBox}>
+                  <View style={styles.selectedFileIcon}>
+                    <Ionicons name="document-text" size={24} color="#0a4d36" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.selectedFileNameText} numberOfLines={1}>
+                      {studentFile.name}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                      <Text style={styles.selectedFileSizeText}>
+                        {studentFile.size ? `${(studentFile.size / 1024).toFixed(1)} KB` : 'CSV Document'}
+                      </Text>
+                      <View style={styles.readyBadgeSmall}>
+                        <Ionicons name="checkmark-circle" size={12} color="#059669" style={{ marginRight: 3 }} />
+                        <Text style={styles.readyBadgeSmallText}>Ready to enroll</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <TouchableOpacity onPress={() => setStudentFile(null)}>
+                    <Ionicons name="close-circle" size={20} color="#94a3b8" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Class, Section & Session Details */}
+              <Text style={styles.modalFieldLabel}>Class &amp; Enrollment Targets</Text>
+              <View style={styles.formRow}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.formSubLabel}>Section</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    value={inputSection}
+                    onChangeText={setInputSection}
+                    placeholder="e.g. BSCS-6A"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formSubLabel}>Session / Batch</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    value={inputSession}
+                    onChangeText={setInputSession}
+                    placeholder="e.g. 2022-2026"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+              </View>
+
+              <View style={{ marginTop: 8 }}>
+                <Text style={styles.formSubLabel}>Class / Degree Program</Text>
+                <TextInput
+                  style={styles.modalTextInput}
+                  value={inputClassName}
+                  onChangeText={setInputClassName}
+                  placeholder="e.g. BS Computer Science"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              {/* Collapsible Manual Paste / Sample */}
+              <View style={{ marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center' }}
+                    onPress={() => setShowManualStudentPaste(!showManualStudentPaste)}
+                  >
+                    <Ionicons
+                      name={showManualStudentPaste ? 'chevron-up' : 'chevron-down'}
+                      size={14}
+                      color="#64748b"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text style={{ fontSize: 12, color: '#64748b', fontWeight: '600' }}>
+                      {showManualStudentPaste ? 'Hide text paste' : 'Or paste student list / load sample'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.sampleMiniBtn}
+                    onPress={handleLoadSampleStudents}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="clipboard-outline" size={12} color="#0a4d36" style={{ marginRight: 4 }} />
+                    <Text style={styles.sampleMiniBtnText}>Load Sample</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {showManualStudentPaste && (
+                  <TextInput
+                    style={styles.studentPasteArea}
+                    value={pastedStudentText}
+                    onChangeText={setPastedStudentText}
+                    placeholder={`Roll No,Student Name,Class,Section,Session\nFA22-BCS-001,Ali Raza,BSCS,BSCS-6A,2022-2026`}
+                    placeholderTextColor="#94a3b8"
+                    multiline
+                    numberOfLines={5}
+                  />
+                )}
+              </View>
+
+              {/* Action Button */}
+              <TouchableOpacity
+                style={[
+                  styles.certifySubmitBtn,
+                  { marginTop: 18 },
+                  !studentFile && !pastedStudentText.trim() && { backgroundColor: '#e2e8f0' },
+                ]}
+                onPress={handleUploadStudentRoster}
+                disabled={importingStudents || (!studentFile && !pastedStudentText.trim())}
+                activeOpacity={0.88}
+              >
+                {importingStudents ? (
+                  <ActivityIndicator color="#0a4d36" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="people" size={18} color="#0a4d36" style={{ marginRight: 8 }} />
+                    <Text style={styles.certifySubmitBtnText}>
+                      Enroll &amp; Update Class Register
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -1002,5 +1317,177 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  importStudentsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#e6f7ef',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  importStudentsBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  importBarIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  importStudentsBarTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0a4d36',
+  },
+  importStudentsBarSub: {
+    fontSize: 10,
+    color: '#166534',
+    marginTop: 1,
+  },
+  slotTargetBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    marginBottom: 14,
+  },
+  slotTargetBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#166534',
+    flex: 1,
+  },
+  studentDropZone: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#0a4d36',
+    borderRadius: 14,
+    backgroundColor: '#f6fbf8',
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  studentDropIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#e6f7ef',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  studentDropTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0a4d36',
+    marginBottom: 2,
+  },
+  studentDropSub: {
+    fontSize: 11,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  studentBrowseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#0a4d36',
+  },
+  studentBrowseBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0a4d36',
+  },
+  selectedFileBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#86efac',
+    marginBottom: 12,
+  },
+  selectedFileIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedFileNameText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  selectedFileSizeText: {
+    fontSize: 10,
+    color: '#64748b',
+    marginRight: 8,
+  },
+  readyBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  readyBadgeSmallText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  formRow: {
+    flexDirection: 'row',
+  },
+  formSubLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  sampleMiniBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e6f7ef',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  sampleMiniBtnText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#0a4d36',
+  },
+  studentPasteArea: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    padding: 8,
+    fontSize: 11,
+    color: '#0f172a',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    height: 80,
+    textAlignVertical: 'top',
+    marginTop: 8,
   },
 });

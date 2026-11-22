@@ -111,11 +111,24 @@ export async function importStudentsFromCsv(filePath) {
 
             for (const row of chunk) {
               try {
-                const rollNumber = row.rollNumber?.trim();
-                const fullName = row.fullName?.trim();
-                const email = (row.email || `${rollNumber.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.uos.edu.pk`).toLowerCase().trim();
-                const sectionName = (row.sectionName || 'BSCS-6A').trim();
-                const deptCode = (row.departmentCode || 'CS').toUpperCase().trim();
+                // Flexible header resolution for CSV imports
+                const findField = (keys) => {
+                  for (const k of Object.keys(row)) {
+                    const norm = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    if (keys.some((target) => norm === target || norm.includes(target))) {
+                      const val = row[k];
+                      if (val && typeof val === 'string' && val.trim()) return val.trim();
+                    }
+                  }
+                  return '';
+                };
+
+                const rollNumber = (row.rollNumber || findField(['rollnumber', 'rollno', 'roll', 'regno', 'reg', 'seat', 'urn', 'id'])).toUpperCase();
+                const fullName = row.fullName || findField(['fullname', 'name', 'studentname', 'student']);
+                const sectionName = (row.sectionName || findField(['sectionname', 'section', 'sec']) || 'BSCS-6A').toUpperCase();
+                const academicYear = row.academicYear || findField(['academicyear', 'session', 'batch', 'year']) || '2025-2026';
+                const deptCode = (row.departmentCode || findField(['departmentcode', 'deptcode', 'dept', 'class', 'degree', 'program']) || 'CS').toUpperCase();
+                const email = (row.email || findField(['email', 'studentemail']) || `${rollNumber.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.uos.edu.pk`).toLowerCase();
 
                 if (!rollNumber || !fullName) continue;
 
@@ -130,17 +143,19 @@ export async function importStudentsFromCsv(filePath) {
                 }
 
                 // Section resolution
-                let secId = sectionMap.get(sectionName.toUpperCase());
+                const secKey = `${sectionName}_${academicYear}`;
+                let secId = sectionMap.get(secKey) || sectionMap.get(sectionName);
                 if (!secId) {
                   const newSec = await prisma.section.create({
                     data: {
                       name: sectionName,
-                      semester: 6,
-                      academicYear: '2025-2026',
+                      semester: 1,
+                      academicYear,
                       departmentId: deptId,
                     },
                   });
-                  sectionMap.set(sectionName.toUpperCase(), newSec.id);
+                  sectionMap.set(secKey, newSec.id);
+                  sectionMap.set(sectionName, newSec.id);
                   secId = newSec.id;
                 }
 
@@ -193,7 +208,7 @@ export async function importStudentsFromCsv(filePath) {
  * Supports teacher matching by name (or email/ID), auto-creates teachers if missing,
  * and handles all 8 semesters and multiple sections in a single CSV upload.
  */
-export async function importTimetableFromCsv(filePath) {
+export async function importTimetableFromCsv(filePath, versionName = 'v2.0') {
   const defaultPassword = await getDefaultPasswordHash();
   const rows = [];
 
@@ -340,6 +355,8 @@ export async function importTimetableFromCsv(filePath) {
                   sectionId,
                   teacherId: teacher.id,
                   roomId,
+                  timetableVersion: versionName,
+                  isActive: true,
                 },
               });
 
