@@ -13,6 +13,7 @@ import {
   Alert,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -302,11 +303,20 @@ export const TeacherDashboardScreen = ({
       {/* Top Green Header Card */}
       <View style={styles.header}>
         <View style={styles.greetingRow}>
-          <View style={styles.greetingTextContainer}>
-            <Text style={styles.greetingSub}>Assalam-o-Alaikum</Text>
-            <Text style={styles.greetingName} numberOfLines={1}>
-              {user?.fullName || 'Faculty Member'}
-            </Text>
+          <View style={styles.greetingBrandRow}>
+            <View style={styles.headerLogoBox}>
+              <Image
+                source={require('../../assets/uos-logo.png')}
+                style={styles.headerLogoImg}
+                resizeMode="contain"
+              />
+            </View>
+            <View style={styles.greetingTextContainer}>
+              <Text style={styles.greetingSub}>University of Sahiwal</Text>
+              <Text style={styles.greetingName} numberOfLines={1}>
+                {user?.fullName || 'Faculty Member'}
+              </Text>
+            </View>
           </View>
 
           {/* Golden Amber Avatar Circle */}
@@ -561,9 +571,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  greetingBrandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 10,
+  },
+  headerLogoBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    padding: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  headerLogoImg: {
+    width: '100%',
+    height: '100%',
+  },
   greetingTextContainer: {
     flex: 1,
-    paddingRight: 12,
   },
   greetingSub: {
     fontSize: 13,
