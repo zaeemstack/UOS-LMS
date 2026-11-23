@@ -2,7 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Default PC Wi-Fi IP for local testing
-export const DEFAULT_API_URL = 'http://192.168.100.226:5000/api';
+export const DEFAULT_API_URL = 'http://172.200.63.13:5000/api';
 
 const api = axios.create({
   baseURL: DEFAULT_API_URL,
