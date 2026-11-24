@@ -17,6 +17,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../context/AuthContext';
+import { DEFAULT_API_URL } from '../api/client';
 
 const { width } = Dimensions.get('window');
 
@@ -282,6 +283,19 @@ export const LoginScreen = () => {
                 onPress={saveServerUrl}
               >
                 <Text style={styles.saveServerBtnText}>Update Server Address</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveServerBtn, { backgroundColor: '#f2b737', marginTop: 8 }]}
+                onPress={() => {
+                  setCustomIp(DEFAULT_API_URL);
+                  updateServerUrl(DEFAULT_API_URL);
+                  Alert.alert('Server Reset', `Updated to default: ${DEFAULT_API_URL}`);
+                }}
+              >
+                <Text style={[styles.saveServerBtnText, { color: '#0a4d36' }]}>
+                  🔄 Reset to Current PC IP (192.168.1.62)
+                </Text>
               </TouchableOpacity>
             </View>
           )}
