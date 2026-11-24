@@ -294,7 +294,7 @@ export const LoginScreen = () => {
                 }}
               >
                 <Text style={[styles.saveServerBtnText, { color: '#0a4d36' }]}>
-                  🔄 Reset to Current PC IP (192.168.1.62)
+                  🔄 Reset to Current PC IP (172.200.63.13)
                 </Text>
               </TouchableOpacity>
             </View>
