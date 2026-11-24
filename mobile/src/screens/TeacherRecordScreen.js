@@ -180,6 +180,12 @@ export const TeacherRecordScreen = ({ onBack, onTabChange, activeTab = 'profile'
               </Text>
             </View>
           </View>
+
+          {/* Quick Sign Out from Profile Card */}
+          <TouchableOpacity style={styles.topSignOutBtn} onPress={handleLogout} activeOpacity={0.88}>
+            <Ionicons name="log-out-outline" size={16} color="#dc2626" style={{ marginRight: 6 }} />
+            <Text style={styles.topSignOutBtnText}>Sign Out of Portal</Text>
+          </TouchableOpacity>
         </View>
 
         {/* 4 Summary Stat KPIs */}
@@ -609,6 +615,22 @@ const styles = StyleSheet.create({
   logoutBtnText: {
     color: '#dc2626',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  topSignOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff5f5',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 14,
+  },
+  topSignOutBtnText: {
+    color: '#dc2626',
+    fontSize: 13,
     fontWeight: '700',
   },
   bottomNav: {

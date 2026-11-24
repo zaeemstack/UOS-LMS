@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { ProfileModal } from '../components/ProfileModal';
 
 const WEEKDAYS = [
   { key: 'MONDAY', label: 'Mon', shortDate: '17' },
@@ -28,10 +29,18 @@ export const HodClassesScreen = ({
   activeTab = 'hod_classes',
   onTabChange,
 }) => {
-  const { user, isCampusNetwork, checkCampusStatus } = useAuth();
+  const { user, logout, isCampusNetwork, checkCampusStatus } = useAuth();
   const [hodSlots, setHodSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  const getInitials = (name) => {
+    if (!name) return 'HD';
+    const parts = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.)\s*/i, '').trim().split(' ');
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return parts[0] ? parts[0].substring(0, 2).toUpperCase() : 'HD';
+  };
 
   const getSystemDay = () => {
     const dayIndex = new Date().getDay();
@@ -169,9 +178,13 @@ export const HodClassesScreen = ({
             <Text style={styles.greetingRole}>Head of Department · Teaching Timetable</Text>
           </View>
 
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>AN</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.avatarCircle}
+            onPress={() => setShowProfileModal(true)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.avatarText}>{getInitials(user?.fullName || 'Dr. Asif')}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Network Pill */}
@@ -336,6 +349,14 @@ export const HodClassesScreen = ({
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Profile & Sign Out Modal */}
+      <ProfileModal
+        visible={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        user={user}
+        onSignOut={logout}
+      />
     </SafeAreaView>
   );
 };

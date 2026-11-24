@@ -19,6 +19,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { ProfileModal } from '../components/ProfileModal';
 
 const WEEKDAYS = [
   { key: 'MONDAY', label: 'Mon', shortDate: '17' },
@@ -53,6 +54,7 @@ export const TeacherDashboardScreen = ({
 
   // Override Request Modal state
   const [overrideModalVisible, setOverrideModalVisible] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedSlotForOverride, setSelectedSlotForOverride] = useState(null);
   const [overrideReason, setOverrideReason] = useState('');
   const [submittingOverride, setSubmittingOverride] = useState(false);
@@ -322,7 +324,7 @@ export const TeacherDashboardScreen = ({
           {/* Golden Amber Avatar Circle */}
           <TouchableOpacity
             style={styles.avatarCircle}
-            onPress={() => onTabChange && onTabChange('profile')}
+            onPress={() => setShowProfileModal(true)}
             activeOpacity={0.85}
           >
             <Text style={styles.avatarText}>
@@ -550,6 +552,14 @@ export const TeacherDashboardScreen = ({
           </View>
         </View>
       </Modal>
+
+      {/* Profile & Sign Out Modal */}
+      <ProfileModal
+        visible={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        user={user}
+        onSignOut={logout}
+      />
     </SafeAreaView>
   );
 };

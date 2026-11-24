@@ -319,6 +319,7 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 56 : 42,
     paddingHorizontal: 24,
     paddingBottom: 32,
+    alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
   },
@@ -367,11 +368,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     letterSpacing: 0.2,
     marginBottom: 4,
+    textAlign: 'center',
   },
   portalSubtitle: {
     fontSize: 14,
     color: '#d1fae5',
     fontWeight: '400',
+    textAlign: 'center',
   },
   bottomCard: {
     flex: 1,
